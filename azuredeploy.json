@@ -1,0 +1,592 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "3619262340279101096"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Deployment location."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-frugal",
+      "metadata": {
+        "description": "Resource group to create / use."
+      }
+    },
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "frugal",
+      "metadata": {
+        "description": "Short name prefix for resources."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "metadata": {
+        "description": "Container image, e.g. ghcr.io/abhijitsghosh/frugal:0.1.0"
+      }
+    },
+    "dbAdminUser": {
+      "type": "string",
+      "defaultValue": "frugaladmin",
+      "metadata": {
+        "description": "PostgreSQL admin username."
+      }
+    },
+    "dbAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL admin password (12+ chars, mixed)."
+      }
+    },
+    "entraTenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Microsoft Entra tenant id that issues access tokens. Defaults to the deploying subscription's tenant."
+      }
+    },
+    "entraAppDisplayName": {
+      "type": "string",
+      "defaultValue": "Frugal",
+      "metadata": {
+        "description": "Display name for the auto-created Entra app registration."
+      }
+    },
+    "bootstrapAdminObjectId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Object id of the user or group to grant the Frugal Admin role at deploy time. Leave blank to grant the deploying user automatically."
+      }
+    },
+    "resourceNameSuffix": {
+      "type": "string",
+      "defaultValue": "[utcNow('yyMMddHHmmss')]",
+      "metadata": {
+        "description": "Suffix appended to globally-unique resource names (Key Vault, PostgreSQL). Defaults to a deploy-time timestamp so a redeploy after teardown never collides with a soft-deleted name. Override with a fixed value to keep names stable across redeploys of the same environment."
+      }
+    }
+  },
+  "variables": {
+    "effectiveAdminObjectId": "[if(empty(parameters('bootstrapAdminObjectId')), deployer().objectId, parameters('bootstrapAdminObjectId'))]",
+    "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+    "cmReaderRoleId": "72fafb9e-0641-4937-9268-a91bfd8191a3"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-11-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().id, parameters('resourceGroupName'), parameters('namePrefix'), variables('readerRoleId'))]",
+      "properties": {
+        "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityPrincipalId.value]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('readerRoleId'))]"
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().id, parameters('resourceGroupName'), parameters('namePrefix'), variables('cmReaderRoleId'))]",
+      "properties": {
+        "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityPrincipalId.value]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('cmReaderRoleId'))]"
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "avd-resources",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "namePrefix": {
+            "value": "[parameters('namePrefix')]"
+          },
+          "containerImage": {
+            "value": "[parameters('containerImage')]"
+          },
+          "dbAdminUser": {
+            "value": "[parameters('dbAdminUser')]"
+          },
+          "dbAdminPassword": {
+            "value": "[parameters('dbAdminPassword')]"
+          },
+          "subscriptionIdForApp": {
+            "value": "[subscription().subscriptionId]"
+          },
+          "entraTenantId": {
+            "value": "[parameters('entraTenantId')]"
+          },
+          "entraAppDisplayName": {
+            "value": "[parameters('entraAppDisplayName')]"
+          },
+          "bootstrapAdminObjectId": {
+            "value": "[variables('effectiveAdminObjectId')]"
+          },
+          "resourceNameSuffix": {
+            "value": "[parameters('resourceNameSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "5109914858363048124"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "namePrefix": {
+              "type": "string"
+            },
+            "containerImage": {
+              "type": "string"
+            },
+            "dbAdminUser": {
+              "type": "string"
+            },
+            "dbAdminPassword": {
+              "type": "securestring"
+            },
+            "subscriptionIdForApp": {
+              "type": "string",
+              "metadata": {
+                "description": "Subscription the app should sync cost data for (passed to the container as AZURE_SUBSCRIPTIONS)."
+              }
+            },
+            "entraTenantId": {
+              "type": "string",
+              "metadata": {
+                "description": "Entra tenant id (token issuer). Defaults at the parent template to the deploying tenant."
+              }
+            },
+            "entraAppDisplayName": {
+              "type": "string",
+              "defaultValue": "Frugal",
+              "metadata": {
+                "description": "Display name shown for the auto-created app registration in Entra."
+              }
+            },
+            "bootstrapAdminObjectId": {
+              "type": "string",
+              "metadata": {
+                "description": "Object id of the user/group to grant the Frugal Admin app role at deploy time."
+              }
+            },
+            "resourceNameSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Suffix appended to globally-unique resource names (Key Vault, PostgreSQL) so a redeploy after teardown does not collide with soft-deleted/reserved names."
+              }
+            }
+          },
+          "variables": {
+            "dbName": "avd",
+            "adminAppRoleId": "22222222-2222-2222-2222-2222000000a1",
+            "avdContributorRoleId": "082f0a83-3be5-4ba1-904c-961cc79ebf3d"
+          },
+          "imports": {
+            "microsoftGraphV1_0": {
+              "provider": "MicrosoftGraph",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "pg::db": {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('{0}-pg-{1}', parameters('namePrefix'), parameters('resourceNameSuffix')), variables('dbName'))]",
+              "dependsOn": [
+                "pg"
+              ]
+            },
+            "pg::allowAzure": {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('{0}-pg-{1}', parameters('namePrefix'), parameters('resourceNameSuffix')), 'AllowAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "pg"
+              ]
+            },
+            "uami": {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('{0}-id', parameters('namePrefix'))]",
+              "location": "[parameters('location')]"
+            },
+            "law": {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-law', parameters('namePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": 30
+              }
+            },
+            "kv": {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true
+              }
+            },
+            "pg": {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}-pg-{1}', parameters('namePrefix'), parameters('resourceNameSuffix'))]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_B1ms",
+                "tier": "Burstable"
+              },
+              "properties": {
+                "version": "16",
+                "administratorLogin": "[parameters('dbAdminUser')]",
+                "administratorLoginPassword": "[parameters('dbAdminPassword')]",
+                "storage": {
+                  "storageSizeGB": 32
+                },
+                "backup": {
+                  "backupRetentionDays": 7
+                },
+                "highAvailability": {
+                  "mode": "Disabled"
+                }
+              }
+            },
+            "cae": {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}-env', parameters('namePrefix'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "appLogsConfiguration": {
+                  "destination": "log-analytics",
+                  "logAnalyticsConfiguration": {
+                    "customerId": "[reference('law').customerId]",
+                    "sharedKey": "[listKeys('law', '2023-09-01').primarySharedKey]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "law"
+              ]
+            },
+            "graphApp": {
+              "import": "microsoftGraphV1_0",
+              "type": "Microsoft.Graph/applications@v1.0",
+              "properties": {
+                "uniqueName": "[format('{0}-{1}', parameters('namePrefix'), uniqueString(subscription().id, parameters('namePrefix')))]",
+                "displayName": "[parameters('entraAppDisplayName')]",
+                "signInAudience": "AzureADMyOrg",
+                "api": {
+                  "requestedAccessTokenVersion": 2,
+                  "oauth2PermissionScopes": [
+                    {
+                      "id": "11111111-1111-1111-1111-1111000000a1",
+                      "adminConsentDescription": "Allow signed-in users to call the Frugal API on their behalf.",
+                      "adminConsentDisplayName": "Access Frugal",
+                      "userConsentDescription": "Allow this app to call Frugal on your behalf.",
+                      "userConsentDisplayName": "Access Frugal",
+                      "type": "User",
+                      "value": "access_as_user",
+                      "isEnabled": true
+                    }
+                  ]
+                },
+                "appRoles": [
+                  {
+                    "id": "22222222-2222-2222-2222-2222000000a1",
+                    "allowedMemberTypes": [
+                      "User",
+                      "Group"
+                    ],
+                    "description": "Full control: register subscriptions, run image bakes, all reads/writes.",
+                    "displayName": "Admin",
+                    "value": "Admin",
+                    "isEnabled": true
+                  },
+                  {
+                    "id": "22222222-2222-2222-2222-2222000000a2",
+                    "allowedMemberTypes": [
+                      "User",
+                      "Group"
+                    ],
+                    "description": "Operate: trigger syncs, drain/scale host pools, refresh image catalog.",
+                    "displayName": "Operator",
+                    "value": "Operator",
+                    "isEnabled": true
+                  },
+                  {
+                    "id": "22222222-2222-2222-2222-2222000000a3",
+                    "allowedMemberTypes": [
+                      "User",
+                      "Group"
+                    ],
+                    "description": "Read-only access to dashboards, costs and inventory.",
+                    "displayName": "Viewer",
+                    "value": "Viewer",
+                    "isEnabled": true
+                  }
+                ],
+                "spa": {
+                  "redirectUris": [
+                    "[format('https://{0}', format('{0}-app.{1}', parameters('namePrefix'), reference('cae').defaultDomain))]"
+                  ]
+                },
+                "web": {
+                  "redirectUris": [
+                    "[format('https://{0}', format('{0}-app.{1}', parameters('namePrefix'), reference('cae').defaultDomain))]"
+                  ]
+                }
+              },
+              "dependsOn": [
+                "cae"
+              ]
+            },
+            "graphSp": {
+              "import": "microsoftGraphV1_0",
+              "type": "Microsoft.Graph/servicePrincipals@v1.0",
+              "properties": {
+                "appId": "[reference('graphApp').appId]"
+              },
+              "dependsOn": [
+                "graphApp"
+              ]
+            },
+            "adminAssignment": {
+              "import": "microsoftGraphV1_0",
+              "type": "Microsoft.Graph/appRoleAssignedTo@v1.0",
+              "properties": {
+                "appRoleId": "[variables('adminAppRoleId')]",
+                "principalId": "[parameters('bootstrapAdminObjectId')]",
+                "resourceId": "[reference('graphSp').id]"
+              },
+              "dependsOn": [
+                "graphSp"
+              ]
+            },
+            "app": {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}-app', parameters('namePrefix'))]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix'))))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+                "configuration": {
+                  "ingress": {
+                    "external": true,
+                    "targetPort": 8080
+                  },
+                  "secrets": [
+                    {
+                      "name": "db-password",
+                      "value": "[parameters('dbAdminPassword')]"
+                    }
+                  ]
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "frugal",
+                      "image": "[parameters('containerImage')]",
+                      "resources": {
+                        "cpu": "[json('0.5')]",
+                        "memory": "1Gi"
+                      },
+                      "env": [
+                        {
+                          "name": "SPRING_PROFILES_ACTIVE",
+                          "value": "prod"
+                        },
+                        {
+                          "name": "AZURE_MI_CLIENT_ID",
+                          "value": "[reference('uami').clientId]"
+                        },
+                        {
+                          "name": "AVD_AZURE_LIVE",
+                          "value": "true"
+                        },
+                        {
+                          "name": "AZURE_SUBSCRIPTIONS",
+                          "value": "[parameters('subscriptionIdForApp')]"
+                        },
+                        {
+                          "name": "AVD_AUTH_REQUIRED",
+                          "value": "true"
+                        },
+                        {
+                          "name": "ENTRA_TENANT_ID",
+                          "value": "[parameters('entraTenantId')]"
+                        },
+                        {
+                          "name": "ENTRA_API_CLIENT_ID",
+                          "value": "[reference('graphApp').appId]"
+                        },
+                        {
+                          "name": "DB_HOST",
+                          "value": "[reference('pg').fullyQualifiedDomainName]"
+                        },
+                        {
+                          "name": "DB_NAME",
+                          "value": "[variables('dbName')]"
+                        },
+                        {
+                          "name": "DB_USER",
+                          "value": "[parameters('dbAdminUser')]"
+                        },
+                        {
+                          "name": "DB_PASSWORD",
+                          "secretRef": "db-password"
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 3
+                  }
+                }
+              },
+              "dependsOn": [
+                "cae",
+                "graphApp",
+                "pg",
+                "uami"
+              ]
+            },
+            "avdRole": {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix'))), variables('avdContributorRoleId'))]",
+              "properties": {
+                "principalId": "[reference('uami').principalId]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('avdContributorRoleId'))]"
+              },
+              "dependsOn": [
+                "uami"
+              ]
+            }
+          },
+          "outputs": {
+            "appFqdn": {
+              "type": "string",
+              "value": "[reference('app').configuration.ingress.fqdn]"
+            },
+            "appUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', format('{0}-app.{1}', parameters('namePrefix'), reference('cae').defaultDomain))]"
+            },
+            "managedIdentityClientId": {
+              "type": "string",
+              "value": "[reference('uami').clientId]"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "value": "[reference('uami').principalId]"
+            },
+            "keyVaultName": {
+              "type": "string",
+              "value": "[format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix'))]"
+            },
+            "entraAppId": {
+              "type": "string",
+              "value": "[reference('graphApp').appId]"
+            },
+            "entraServicePrincipalId": {
+              "type": "string",
+              "value": "[reference('graphSp').id]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "appFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.appFqdn.value]"
+    },
+    "appUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.appUrl.value]"
+    },
+    "managedIdentityClientId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityClientId.value]"
+    },
+    "entraAppId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.entraAppId.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.keyVaultName.value]"
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[parameters('resourceGroupName')]"
+    }
+  }
+}
