@@ -5,14 +5,15 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "5984956321310267348"
+      "templateHash": "6371763157364343664"
     }
   },
   "parameters": {
     "location": {
       "type": "string",
+      "defaultValue": "[deployment().location]",
       "metadata": {
-        "description": "Deployment location."
+        "description": "Deployment location. Defaults to the deployment metadata location (the --location passed to the deploy command), so customers only specify the region once."
       }
     },
     "resourceGroupName": {
