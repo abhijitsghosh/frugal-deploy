@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "14882663794622391042"
+      "templateHash": "13689225108079827303"
     }
   },
   "parameters": {
@@ -69,6 +69,13 @@
       "metadata": {
         "description": "Suffix appended to globally-unique resource names (Key Vault, PostgreSQL). Defaults to a deploy-time timestamp so a redeploy after teardown never collides with a soft-deleted name. Override with a fixed value to keep names stable across redeploys of the same environment."
       }
+    },
+    "avdResourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-frugal-avd",
+      "metadata": {
+        "description": "Resource group Frugal provisions AVD into (host pools + session-host VMs). Kept separate from Frugal's own infra so its broad permissions are scoped to one group."
+      }
     }
   },
   "variables": {
@@ -80,6 +87,12 @@
       "type": "Microsoft.Resources/resourceGroups",
       "apiVersion": "2024-11-01",
       "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-11-01",
+      "name": "[parameters('avdResourceGroupName')]",
       "location": "[parameters('location')]"
     },
     {
@@ -434,6 +447,61 @@
       "dependsOn": [
         "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
       ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "avd-rbac",
+      "resourceGroup": "[parameters('avdResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityPrincipalId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "16986896740273096470"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal id of Frugal's user-assigned managed identity."
+              }
+            }
+          },
+          "variables": {
+            "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('contributorRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('avdResourceGroupName'))]"
+      ]
     }
   ],
   "outputs": {
@@ -456,6 +524,10 @@
     "resourceGroupName": {
       "type": "string",
       "value": "[parameters('resourceGroupName')]"
+    },
+    "avdResourceGroupName": {
+      "type": "string",
+      "value": "[parameters('avdResourceGroupName')]"
     }
   }
 }
