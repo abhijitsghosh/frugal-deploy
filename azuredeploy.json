@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "13689225108079827303"
+      "version": "0.44.1.10279",
+      "templateHash": "16536962507504340642"
     }
   },
   "parameters": {
@@ -166,8 +166,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "17601193677220809195"
+              "version": "0.44.1.10279",
+              "templateHash": "10047218503485191193"
             }
           },
           "parameters": {
@@ -469,8 +469,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "16986896740273096470"
+              "version": "0.44.1.10279",
+              "templateHash": "7354455458919168731"
             }
           },
           "parameters": {
@@ -482,7 +482,8 @@
             }
           },
           "variables": {
-            "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c"
+            "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+            "userAccessAdminRoleId": "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
           },
           "resources": [
             {
@@ -493,6 +494,16 @@
                 "principalId": "[parameters('principalId')]",
                 "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('userAccessAdminRoleId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('userAccessAdminRoleId'))]"
               }
             }
           ]
@@ -516,6 +527,10 @@
     "managedIdentityClientId": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityClientId.value]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityPrincipalId.value]"
     },
     "keyVaultName": {
       "type": "string",
