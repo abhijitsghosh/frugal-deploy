@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "16536962507504340642"
+      "templateHash": "16962023336695609907"
     }
   },
   "parameters": {
@@ -470,7 +470,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "7354455458919168731"
+              "templateHash": "4401932967818538985"
             }
           },
           "parameters": {
@@ -483,7 +483,8 @@
           },
           "variables": {
             "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
-            "userAccessAdminRoleId": "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"
+            "rbacAdminRoleId": "f58310d9-a9f6-439a-9e8d-f62e7b41a168",
+            "desktopVirtUserRoleId": "1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63"
           },
           "resources": [
             {
@@ -499,11 +500,13 @@
             {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('userAccessAdminRoleId'))]",
+              "name": "[guid(resourceGroup().id, parameters('principalId'), variables('rbacAdminRoleId'))]",
               "properties": {
                 "principalId": "[parameters('principalId')]",
                 "principalType": "ServicePrincipal",
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('userAccessAdminRoleId'))]"
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('rbacAdminRoleId'))]",
+                "conditionVersion": "2.0",
+                "condition": "[format('((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/write''}})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{0}}})) AND ((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/delete''}})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{1}}}))', variables('desktopVirtUserRoleId'), variables('desktopVirtUserRoleId'))]"
               }
             }
           ]
