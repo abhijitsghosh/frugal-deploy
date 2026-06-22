@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "16962023336695609907"
+      "templateHash": "17827724631655750766"
     }
   },
   "parameters": {
@@ -470,7 +470,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "4401932967818538985"
+              "templateHash": "303932370071108833"
             }
           },
           "parameters": {
@@ -484,7 +484,8 @@
           "variables": {
             "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
             "rbacAdminRoleId": "f58310d9-a9f6-439a-9e8d-f62e7b41a168",
-            "desktopVirtUserRoleId": "1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63"
+            "desktopVirtUserRoleId": "1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63",
+            "vmUserLoginRoleId": "fb879df8-f326-4884-b1cf-06f3ad86be52"
           },
           "resources": [
             {
@@ -506,7 +507,7 @@
                 "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('rbacAdminRoleId'))]",
                 "conditionVersion": "2.0",
-                "condition": "[format('((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/write''}})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{0}}})) AND ((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/delete''}})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{1}}}))', variables('desktopVirtUserRoleId'), variables('desktopVirtUserRoleId'))]"
+                "condition": "[format('((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/write''}})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{0}, {1}}})) AND ((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/delete''}})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{2}, {3}}}))', variables('desktopVirtUserRoleId'), variables('vmUserLoginRoleId'), variables('desktopVirtUserRoleId'), variables('vmUserLoginRoleId'))]"
               }
             }
           ]
