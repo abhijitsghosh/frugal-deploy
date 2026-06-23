@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "17827724631655750766"
+      "templateHash": "1343650429989334739"
     }
   },
   "parameters": {
@@ -79,6 +79,7 @@
     }
   },
   "variables": {
+    "fslogixStorageAccount": "[format('frugalfsl{0}', parameters('resourceNameSuffix'))]",
     "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
     "cmReaderRoleId": "72fafb9e-0641-4937-9268-a91bfd8191a3"
   },
@@ -158,6 +159,9 @@
           },
           "resourceNameSuffix": {
             "value": "[parameters('resourceNameSuffix')]"
+          },
+          "fslogixStorageAccount": {
+            "value": "[variables('fslogixStorageAccount')]"
           }
         },
         "template": {
@@ -167,7 +171,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "10047218503485191193"
+              "templateHash": "8314513840913039808"
             }
           },
           "parameters": {
@@ -210,11 +214,19 @@
               "metadata": {
                 "description": "Suffix appended to globally-unique resource names (Key Vault, PostgreSQL) so a redeploy after teardown does not collide with soft-deleted/reserved names."
               }
+            },
+            "fslogixStorageAccount": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Name of the FSLogix profile storage account (created in rg-frugal-avd). Surfaced to the app so it can configure FSLogix on session hosts."
+              }
             }
           },
           "variables": {
             "dbName": "avd",
-            "avdContributorRoleId": "082f0a83-3be5-4ba1-904c-961cca79b387"
+            "avdContributorRoleId": "082f0a83-3be5-4ba1-904c-961cca79b387",
+            "kvSecretsOfficerRoleId": "b86a8fe4-44ce-4948-aee5-eccb2c155cd7"
           },
           "resources": [
             {
@@ -390,6 +402,14 @@
                         {
                           "name": "DB_PASSWORD",
                           "secretRef": "db-password"
+                        },
+                        {
+                          "name": "FSLOGIX_STORAGE_ACCOUNT",
+                          "value": "[parameters('fslogixStorageAccount')]"
+                        },
+                        {
+                          "name": "KEYVAULT_URI",
+                          "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix'))), '2023-07-01').vaultUri]"
                         }
                       ]
                     }
@@ -402,6 +422,7 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+                "[resourceId('Microsoft.KeyVault/vaults', format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix')))]",
                 "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg-{1}', parameters('namePrefix'), parameters('resourceNameSuffix')))]",
                 "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix')))]"
               ]
@@ -416,6 +437,21 @@
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('avdContributorRoleId'))]"
               },
               "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix')))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix'))), variables('kvSecretsOfficerRoleId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix'))), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('kvSecretsOfficerRoleId'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix')))]",
                 "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix')))]"
               ]
             }
@@ -461,6 +497,12 @@
         "parameters": {
           "principalId": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.managedIdentityPrincipalId.value]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "fslogixStorageAccount": {
+            "value": "[variables('fslogixStorageAccount')]"
           }
         },
         "template": {
@@ -470,7 +512,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "303932370071108833"
+              "templateHash": "10705419531791540593"
             }
           },
           "parameters": {
@@ -479,15 +521,67 @@
               "metadata": {
                 "description": "Principal id of Frugal's user-assigned managed identity."
               }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for the FSLogix storage account."
+              }
+            },
+            "fslogixStorageAccount": {
+              "type": "string",
+              "metadata": {
+                "description": "Globally-unique name for the FSLogix profile storage account."
+              }
             }
           },
           "variables": {
             "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
             "rbacAdminRoleId": "f58310d9-a9f6-439a-9e8d-f62e7b41a168",
             "desktopVirtUserRoleId": "1d18fff3-a72a-46b5-b4a9-0b38a3cd7e63",
-            "vmUserLoginRoleId": "fb879df8-f326-4884-b1cf-06f3ad86be52"
+            "vmUserLoginRoleId": "fb879df8-f326-4884-b1cf-06f3ad86be52",
+            "smbShareContribRoleId": "0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb",
+            "allowedRoles": "[format('{{{0}, {1}, {2}}}', variables('desktopVirtUserRoleId'), variables('vmUserLoginRoleId'), variables('smbShareContribRoleId'))]"
           },
           "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}/{2}', parameters('fslogixStorageAccount'), 'default', 'profiles')]",
+              "properties": {
+                "shareQuota": 100,
+                "enabledProtocols": "SMB"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('fslogixStorageAccount'), 'default')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/fileServices",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}', parameters('fslogixStorageAccount'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('fslogixStorageAccount'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[parameters('fslogixStorageAccount')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "azureFilesIdentityBasedAuthentication": {
+                  "directoryServiceOptions": "AADKERB"
+                }
+              }
+            },
             {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
@@ -507,10 +601,16 @@
                 "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('rbacAdminRoleId'))]",
                 "conditionVersion": "2.0",
-                "condition": "[format('((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/write''}})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{0}, {1}}})) AND ((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/delete''}})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {{{2}, {3}}}))', variables('desktopVirtUserRoleId'), variables('vmUserLoginRoleId'), variables('desktopVirtUserRoleId'), variables('vmUserLoginRoleId'))]"
+                "condition": "[format('((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/write''}})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {0})) AND ((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/delete''}})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {1}))', variables('allowedRoles'), variables('allowedRoles'))]"
               }
             }
-          ]
+          ],
+          "outputs": {
+            "fslogixStorageAccount": {
+              "type": "string",
+              "value": "[parameters('fslogixStorageAccount')]"
+            }
+          }
         }
       },
       "dependsOn": [
@@ -520,6 +620,10 @@
     }
   ],
   "outputs": {
+    "fslogixStorageAccount": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('avdResourceGroupName')), 'Microsoft.Resources/deployments', 'avd-rbac'), '2025-04-01').outputs.fslogixStorageAccount.value]"
+    },
     "appFqdn": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'avd-resources'), '2025-04-01').outputs.appFqdn.value]"
