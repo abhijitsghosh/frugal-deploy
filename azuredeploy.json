@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "1343650429989334739"
+      "templateHash": "2088358061567862612"
     }
   },
   "parameters": {
@@ -80,6 +80,8 @@
   },
   "variables": {
     "fslogixStorageAccount": "[format('frugalfsl{0}', parameters('resourceNameSuffix'))]",
+    "galleryName": "frugalGallery",
+    "imageDefinitionName": "win11-avd-custom",
     "readerRoleId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
     "cmReaderRoleId": "72fafb9e-0641-4937-9268-a91bfd8191a3"
   },
@@ -162,6 +164,15 @@
           },
           "fslogixStorageAccount": {
             "value": "[variables('fslogixStorageAccount')]"
+          },
+          "galleryName": {
+            "value": "[variables('galleryName')]"
+          },
+          "imageDefinitionName": {
+            "value": "[variables('imageDefinitionName')]"
+          },
+          "avdResourceGroupName": {
+            "value": "[parameters('avdResourceGroupName')]"
           }
         },
         "template": {
@@ -171,7 +182,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "8314513840913039808"
+              "templateHash": "9126835519361875448"
             }
           },
           "parameters": {
@@ -220,6 +231,27 @@
               "defaultValue": "",
               "metadata": {
                 "description": "Name of the FSLogix profile storage account (created in rg-frugal-avd). Surfaced to the app so it can configure FSLogix on session hosts."
+              }
+            },
+            "galleryName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Compute Gallery name (golden image target)."
+              }
+            },
+            "imageDefinitionName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Image definition name in the gallery."
+              }
+            },
+            "avdResourceGroupName": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Resource group the gallery + AVD resources live in."
               }
             }
           },
@@ -368,6 +400,14 @@
                           "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix'))), '2023-01-31').clientId]"
                         },
                         {
+                          "name": "AZURE_MI_PRINCIPAL_ID",
+                          "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id', parameters('namePrefix'))), '2023-01-31').principalId]"
+                        },
+                        {
+                          "name": "AZURE_MI_NAME",
+                          "value": "[format('{0}-id', parameters('namePrefix'))]"
+                        },
+                        {
                           "name": "AVD_AZURE_LIVE",
                           "value": "true"
                         },
@@ -410,6 +450,22 @@
                         {
                           "name": "KEYVAULT_URI",
                           "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('{0}-kv-{1}', parameters('namePrefix'), parameters('resourceNameSuffix'))), '2023-07-01').vaultUri]"
+                        },
+                        {
+                          "name": "FRUGAL_GALLERY",
+                          "value": "[parameters('galleryName')]"
+                        },
+                        {
+                          "name": "FRUGAL_IMAGE_DEFINITION",
+                          "value": "[parameters('imageDefinitionName')]"
+                        },
+                        {
+                          "name": "FRUGAL_GALLERY_RG",
+                          "value": "[parameters('avdResourceGroupName')]"
+                        },
+                        {
+                          "name": "FRUGAL_LOCATION",
+                          "value": "[parameters('location')]"
                         }
                       ]
                     }
@@ -503,6 +559,12 @@
           },
           "fslogixStorageAccount": {
             "value": "[variables('fslogixStorageAccount')]"
+          },
+          "galleryName": {
+            "value": "[variables('galleryName')]"
+          },
+          "imageDefinitionName": {
+            "value": "[variables('imageDefinitionName')]"
           }
         },
         "template": {
@@ -512,7 +574,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "10705419531791540593"
+              "templateHash": "5400024150219025982"
             }
           },
           "parameters": {
@@ -533,6 +595,20 @@
               "type": "string",
               "metadata": {
                 "description": "Globally-unique name for the FSLogix profile storage account."
+              }
+            },
+            "galleryName": {
+              "type": "string",
+              "defaultValue": "frugalGallery",
+              "metadata": {
+                "description": "Compute Gallery name (golden images are captured here)."
+              }
+            },
+            "imageDefinitionName": {
+              "type": "string",
+              "defaultValue": "win11-avd-custom",
+              "metadata": {
+                "description": "Image definition name in the gallery."
               }
             }
           },
@@ -603,12 +679,48 @@
                 "conditionVersion": "2.0",
                 "condition": "[format('((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/write''}})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {0})) AND ((!(ActionMatches{{''Microsoft.Authorization/roleAssignments/delete''}})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {1}))', variables('allowedRoles'), variables('allowedRoles'))]"
               }
+            },
+            {
+              "type": "Microsoft.Compute/galleries",
+              "apiVersion": "2023-07-03",
+              "name": "[parameters('galleryName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "description": "Frugal golden images"
+              }
+            },
+            {
+              "type": "Microsoft.Compute/galleries/images",
+              "apiVersion": "2023-07-03",
+              "name": "[format('{0}/{1}', parameters('galleryName'), parameters('imageDefinitionName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "osType": "Windows",
+                "osState": "Generalized",
+                "hyperVGeneration": "V2",
+                "identifier": {
+                  "publisher": "Frugal",
+                  "offer": "AVD",
+                  "sku": "win11-avd-custom"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/galleries', parameters('galleryName'))]"
+              ]
             }
           ],
           "outputs": {
             "fslogixStorageAccount": {
               "type": "string",
               "value": "[parameters('fslogixStorageAccount')]"
+            },
+            "galleryName": {
+              "type": "string",
+              "value": "[parameters('galleryName')]"
+            },
+            "imageDefinitionName": {
+              "type": "string",
+              "value": "[parameters('imageDefinitionName')]"
             }
           }
         }
