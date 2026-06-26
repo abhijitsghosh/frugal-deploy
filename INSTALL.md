@@ -44,9 +44,14 @@ The app container costs nothing while idle (first request after idle takes
 You need, in the subscription/tenant you're installing into:
 
 1. **Owner** on the subscription (the deploy creates role assignments)
-2. **Application Administrator** (or Cloud Application Administrator /
-   Global Administrator) in the Entra tenant (the deploy creates the app
-   registration)
+2. **Global Administrator** in the Entra tenant — or, for least privilege,
+   the pair **Application Administrator + Privileged Role Administrator**.
+   The deploy both creates the app registration (Application Administrator)
+   *and* grants the managed identity Microsoft Graph application permissions
+   in step 3 (`User.Read.All` / `Group.Read.All` / `Application.Read.All`).
+   Only Privileged Role Administrator or Global Administrator can consent to
+   Microsoft Graph app roles — Application / Cloud Application Administrator
+   **cannot**, so Application Administrator alone is not sufficient.
 3. [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
    2.61+ — or just use [Azure Cloud Shell](https://shell.azure.com), which
    has everything preinstalled
