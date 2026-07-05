@@ -87,70 +87,42 @@ whoever manages your Azure for Owner, or have them run the install.
 
 ---
 
-## Install — three commands
+## Install manually / inspect it first
 
-Pick a region close to your users (e.g. `australiaeast`, `eastus`,
-`westeurope`) and use it consistently below.
-
-**1 — Create the sign-in app registration.** Runs with your admin identity;
-creates the Entra app, its service principal, and grants *you* the Frugal
-Admin role.
+The one-liner above is the recommended path. If you'd rather run it yourself, or
+read it before running, download the same script — it prints each step as it goes:
 
 ```
-az deployment sub create --location <region> --name frugal-auth \
-  --template-uri https://raw.githubusercontent.com/abhijitsghosh/frugal-deploy/main/auth.json
+curl -sLO https://frugal.run/install.sh
+less install.sh                       # optional: read exactly what it does
+bash install.sh --region <region>     # e.g. australiaeast, eastus, westeurope
 ```
 
-📋 Note the `entraAppId` value in the outputs.
+Under the hood it does three things with your admin identity + a managed identity
+— **no stored secrets**:
 
-**2 — Deploy the platform.** A [deployment stack](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks)
-— Azure tracks everything it creates, so removal later is one command.
-Takes 10–15 minutes (the database is the slow part).
+1. **Sign-in app registration** — creates the Entra app + service principal via
+   Microsoft Graph (`az rest`) and grants *you* the Frugal **Admin** role. *(Done
+   imperatively with `az`, not an ARM template — the Microsoft Graph Bicep
+   extension proved unreliable.)*
+2. **Platform** — an Azure [deployment stack](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks)
+   (container app, PostgreSQL, Key Vault, Log Analytics, the managed identity).
+   ~10–15 min. If you want to run just this step yourself:
+   ```
+   az stack sub create --name frugal --location <region> \
+     --template-uri https://raw.githubusercontent.com/abhijitsghosh/frugal-deploy/main/azuredeploy.json \
+     --parameters containerImage=ghcr.io/abhijitsghosh/frugal:latest \
+                  dbAdminPassword=<strong password> entraApiClientId=<app id from step 1> \
+     --action-on-unmanage deleteAll --deny-settings-mode none --yes
+   ```
+3. **Wire-up** — registers the app's sign-in URL and grants the managed identity
+   read-only Microsoft Graph (`User.Read.All` / `Group.Read.All` /
+   `Application.Read.All` / `Directory.Read.All`) for user-assignment search and
+   the FSLogix admin-consent link, then recycles the app so the new token carries
+   the permissions.
 
-```
-az stack sub create --name frugal --location <region> \
-  --template-uri https://raw.githubusercontent.com/abhijitsghosh/frugal-deploy/main/azuredeploy.json \
-  --parameters containerImage=ghcr.io/abhijitsghosh/frugal:0.1.6 \
-               dbAdminPassword=<choose a strong password> \
-               entraApiClientId=<entraAppId from step 1> \
-  --action-on-unmanage deleteAll --deny-settings-mode none --yes
-```
-
-📋 Note the `appUrl` **and `managedIdentityPrincipalId`** values in the outputs.
-
-**3 — Register the app's URL for sign-in, and grant the managed identity
-directory read.** Same template as step 1, now told where the app lives and
-which managed identity to grant Microsoft Graph `User.Read.All` /
-`Group.Read.All` / `Application.Read.All` (needed for user-assignment search
-and the FSLogix admin-consent link):
-
-```
-az deployment sub create --location <region> --name frugal-auth \
-  --template-uri https://raw.githubusercontent.com/abhijitsghosh/frugal-deploy/main/auth.json \
-  --parameters appUrl=<appUrl from step 2> \
-               managedIdentityObjectId=<managedIdentityPrincipalId from step 2>
-```
-
-> ⚠️ Don't omit `managedIdentityObjectId` — without it the managed identity
-> gets no Graph permissions, and user search + FSLogix consent silently fail.
-
-**4 — Recycle the app so it picks up the new permissions.** The container
-started in step 2 cached its identity token *before* step 3 granted these
-permissions — and Graph permissions only appear in a freshly-issued token. One
-restart fixes it:
-
-```
-az containerapp revision restart -g rg-frugal -n frugal-app \
-  --revision "$(az containerapp revision list -g rg-frugal -n frugal-app --query "[?properties.active].name | [0]" -o tsv)"
-```
-
-(The app also picks this up on its own within ~15 min — it scales to zero when
-idle and the next cold start gets a fresh token — but restarting makes user
-search and FSLogix consent work immediately.)
-
-**Done.** Open the `appUrl` in a browser, sign in with your work account
-(one consent prompt on first sign-in), and you land on the Frugal dashboard
-as Admin.
+**Done.** Open the URL it prints, sign in with your work account (one consent
+prompt on first sign-in), and you land on the dashboard as **Admin**.
 
 ---
 
