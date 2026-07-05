@@ -13,6 +13,23 @@ to its own resource group.
 
 ---
 
+## Quick install (one line, any OS)
+
+Open **[Azure Cloud Shell](https://shell.azure.com)** (the Bash experience —
+works the same from Windows, macOS or Linux, nothing to install locally) and run:
+
+```
+curl -sL https://frugal.run/install.sh | bash -s -- --region eastus
+```
+
+That runs all three steps below and passes the outputs between them for you —
+no copy-pasting GUIDs. Swap `eastus` for a region near your users. When it
+finishes it prints your Frugal URL; sign in with your work account and you're
+Admin. *(Prefer to run the steps yourself, or want to read the script first? The
+manual commands are below, and the script is the same content.)*
+
+---
+
 ## What gets deployed
 
 One resource group (default `rg-frugal`) containing:
@@ -177,6 +194,33 @@ host pool in Frugal (**Host Pools → expand a pool → FSLogix → Enable**); i
 configures every host and grants assigned users profile access. **Reboot the
 hosts** to apply (FSLogix mounts at logon; the Kerberos setting needs the
 reboot).
+
+---
+
+## Manage an additional / landing-zone subscription
+
+Frugal can create host pools in a **different subscription** than the one it runs
+in — e.g. your AVD landing-zone subscription. The install above only grants
+Frugal's managed identity rights on its own subscription, so grant it the same
+scoped rights on each landing-zone subscription you want to manage:
+
+```
+az deployment sub create \
+  --subscription <LANDING_ZONE_SUB_ID> --location <region> \
+  --template-uri https://raw.githubusercontent.com/abhijitsghosh/frugal-deploy/main/landing-zone.json \
+  --parameters managedIdentityPrincipalId=<managedIdentityPrincipalId from step 2> \
+               fslogixStorageAccount=<globally-unique-name>
+```
+
+This grants the **same least-privilege grant** as the main install (Contributor +
+an ABAC-constrained RBAC Administrator scoped to one resource group, plus
+subscription Reader / Cost Management Reader — no Owner, no User Access
+Administrator) and provisions that subscription's FSLogix storage + image gallery.
+
+Then in Frugal: **Subscriptions → Discover** (the subscription appears once the
+identity has Reader on it) → **Enable**. It's now selectable in the **Subscription**
+dropdown when you **create a host pool**, so the pool + its session hosts land in
+that landing-zone subscription.
 
 ---
 
